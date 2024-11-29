@@ -21,6 +21,18 @@ HORIZON_URL = "https://horizon.stellar.org"
 server = Server(HORIZON_URL)
 distributor_keypair = Keypair.from_secret(DISTRIBUTOR_SECRET_KEY)
 
+def get_distributor_balance():
+    """Fetch the current balance of the distributor's account."""
+    try:
+        distributor_account = server.load_account(distributor_keypair.public_key)
+        for balance in distributor_account.balances:
+            if balance['asset_type'] == 'native':  # Get native XLM balance
+                return float(balance['balance'])
+        raise Exception("No native balance found in the account.")
+    except Exception as e:
+        print(f"Error fetching distributor balance: {e}")
+        return 0  # Return 0 if there's an issue
+
 def send_payment(amount):
     """Send native XLM to the specified receiver."""
     try:
@@ -60,8 +72,13 @@ def send_payment(amount):
 def job():
     """Scheduled job to send payment."""
     try:
-        amount = 0.0001  # Set the amount of XLM to send
-        print(f"Starting transaction at {datetime.now()}")
+        balance = get_distributor_balance()
+        if balance <= 0:
+            print(f"Insufficient balance ({balance} XLM). Skipping transaction.")
+            return
+
+        amount = round(balance * 0.25, 7)  # Calculate 25% of the balance, rounded to 7 decimals
+        print(f"Starting transaction at {datetime.now()} with amount: {amount} XLM")
         send_payment(amount)
     except Exception as e:
         print(f"An error occurred during the job: {e}")

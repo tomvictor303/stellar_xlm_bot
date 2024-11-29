@@ -1,0 +1,4 @@
+stellar_sdk
+configparser
+openpyxl
+schedule

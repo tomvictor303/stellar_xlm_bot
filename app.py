@@ -53,14 +53,15 @@ def get_distributor_balance():
         print(f"Error fetching distributor balance: {e}")
         return 0  # Return 0 if there's an issue
 
-def send_payment(log_filename, destination_address, amount):
+def send_payment(log_filename, destination_address, amount, min_gas_fee = 100):
     """Send native XLM to the specified receiver."""
     try:
         # Load the distributor's account
         distributor_account = server.load_account(distributor_keypair.public_key)
 
-        # Fetch the base fee
+        # Fetch base fee and ensure it's at least 100
         base_fee = server.fetch_base_fee()
+        base_fee = max(base_fee, min_gas_fee)
 
         # Build the transaction
         transaction = (
@@ -87,7 +88,55 @@ def send_payment(log_filename, destination_address, amount):
         else:
             log_result(log_filename, destination_address, amount, False, f"Transaction response: {response}")
     except Exception as e:
-        log_result(log_filename, destination_address, amount, False, f"Error: {e}")
+        if hasattr(e, 'status') and e.status == 504:
+            print("504 Gateway Timeout. Retrying...")
+            time.sleep(5)  # Delay before retrying
+            send_payment(log_filename, destination_address, amount)
+        elif (
+            hasattr(e, 'extras') and 
+            e.extras is not None and 
+            isinstance(e.extras.get('result_codes'), dict) and 
+            e.extras['result_codes'].get('transaction') == 'tx_bad_seq'
+        ):
+            print("Bad sequence number. Reloading account and retrying...")
+            time.sleep(1)  # Brief delay before retrying
+            send_payment(log_filename, destination_address, amount)
+        elif (
+            hasattr(e, 'extras') and 
+            e.extras is not None and 
+            isinstance(e.extras.get('result_codes'), dict) and 
+            e.extras['result_codes'].get('transaction') == 'tx_too_late'
+        ):
+            print("Transaction time out. Retrying...")
+            time.sleep(1)  # Brief delay before retrying
+            send_payment(log_filename, destination_address, amount)
+        elif (
+            hasattr(e, 'extras') and 
+            e.extras is not None and 
+            isinstance(e.extras.get('result_codes'), dict) and 
+            e.extras['result_codes'].get('transaction') == 'tx_insufficient_fee'
+        ):
+            if min_gas_fee < 2000:
+                print("Insufficient fee. Retrying with "+ str(2 * min_gas_fee) +" Stroops...")
+                time.sleep(1)  # Brief delay before retrying
+                send_payment(log_filename, destination_address, amount, 2 * min_gas_fee )
+            else:
+                error_message = "Transaction Failed: Network is too busy at this time. Please try again this transaction at further time."
+                log_result(log_filename, destination_address, amount, False, error_message)
+        elif (
+            hasattr(e, 'extras') and 
+            e.extras is not None and 
+            isinstance(e.extras.get('result_codes'), dict) and 
+            e.extras['result_codes'].get('transaction') == 'tx_failed' and 
+            e.extras['result_codes'].get('operations') and 
+            len(e.extras['result_codes'].get('operations')) > 0 and
+            e.extras['result_codes'].get('operations')[0] == "op_underfunded"
+        ):            
+            error_message = f"Transaction failed: XLM amount is insufficient in distribution account."
+            log_result(log_filename, destination_address, amount, False, error_message)        
+        else:
+            error_message = f"Transaction failed: {e}"
+            log_result(log_filename, destination_address, amount, False, error_message)
 
 def job():
     """Scheduled job to send payment."""

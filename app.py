@@ -24,8 +24,8 @@ distributor_keypair = Keypair.from_secret(DISTRIBUTOR_SECRET_KEY)
 def get_distributor_balance():
     """Fetch the current balance of the distributor's account."""
     try:
-        distributor_account = server.load_account(distributor_keypair.public_key)
-        for balance in distributor_account.balances:
+        distributor_account = server.accounts().account_id(distributor_keypair.public_key).call()
+        for balance in distributor_account['balances']:
             if balance['asset_type'] == 'native':  # Get native XLM balance
                 return float(balance['balance'])
         raise Exception("No native balance found in the account.")

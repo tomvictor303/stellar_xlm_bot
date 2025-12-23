@@ -1,5 +1,6 @@
 import configparser
 import os
+import sys
 import time
 from datetime import datetime
 from stellar_sdk import Server, Keypair, TransactionBuilder, Network, Asset
@@ -9,11 +10,20 @@ import schedule
 config = configparser.ConfigParser()
 config.read('config.txt')
 
-DISTRIBUTOR_SECRET_KEY = config['DEFAULT']['DISTRIBUTOR_SECRET_KEY']
+DISTRIBUTOR_SECRET_KEY = config['DEFAULT'].get('DISTRIBUTOR_SECRET_KEY', '')
 INTERVAL_HOURS = float(config['DEFAULT'].get('INTERVAL_HOURS', 3))
+RECEIVER_ADDRESS = config['DEFAULT'].get('RECEIVER_ADDRESS', '')
+
+# Validation: Check if required configuration values are set
+if DISTRIBUTOR_SECRET_KEY == '':
+    print("ERROR: DISTRIBUTOR_SECRET_KEY is not set in config.txt. Please set it before running the bot.", file=sys.stderr)
+    sys.exit(1)
+
+if RECEIVER_ADDRESS == '':
+    print("ERROR: RECEIVER_ADDRESS is not set in config.txt. Please set it before running the bot.", file=sys.stderr)
+    sys.exit(1)
 
 # Constants
-RECEIVER_ADDRESS = "GDPQWQ37LPPLJJ4SWG5KMHEISATFMD4QTZFWN25UGGHFJ34BY5WTT3DN"
 NETWORK_PASSPHRASE = Network.PUBLIC_NETWORK_PASSPHRASE
 HORIZON_URL = "https://horizon.stellar.org"
 
